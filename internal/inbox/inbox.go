@@ -28,6 +28,7 @@ import (
 const (
 	ChannelEmail    = "email"
 	ChannelLiveChat = "livechat"
+	ChannelWhatsApp = "whatsapp"
 )
 
 var (
@@ -76,6 +77,7 @@ type MessageStore interface {
 // UserStore defines methods for fetching user information.
 type UserStore interface {
 	GetAgent(id int, email string) (umodels.User, error)
+	GetContactOrVisitor(id int, email string) (umodels.User, error)
 	IsEmailBlocked(email string) (bool, error)
 }
 

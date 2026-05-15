@@ -17,6 +17,13 @@
       :available-languages="availableLanguages"
       v-else-if="inbox.channel === 'livechat'"
     />
+    <WhatsAppInboxForm
+      :initialValues="inbox"
+      :inboxUUID="inbox.uuid"
+      :submitForm="submitForm"
+      :isLoading="isLoading"
+      v-else-if="inbox.channel === 'whatsapp'"
+    />
   </div>
 </template>
 
@@ -25,6 +32,7 @@ import { onMounted, ref } from 'vue'
 import api from '../../../api'
 import EmailInboxForm from '@/features/admin/inbox/EmailInboxForm.vue'
 import LivechatInboxForm from '@/features/admin/inbox/LivechatInboxForm.vue'
+import WhatsAppInboxForm from '@/features/admin/inbox/WhatsAppInboxForm.vue'
 import { CustomBreadcrumb } from '@shared-ui/components/ui/breadcrumb/index.js'
 import { Spinner } from '@shared-ui/components/ui/spinner'
 import { EMITTER_EVENTS } from '@/constants/emitterEvents.js'
@@ -93,6 +101,21 @@ const submitForm = (values) => {
       channel: inbox.value.channel,
       config: values.config
     }
+  } else if (inbox.value.channel === 'whatsapp') {
+    const config = {
+      account_sid: values.config.account_sid,
+      auth_token: values.config.auth_token,
+      from_number: values.config.from_number
+    }
+    // Skip masked auth_token (unchanged)
+    if (config.auth_token?.includes('•')) {
+      config.auth_token = ''
+    }
+    payload = {
+      ...values,
+      channel: inbox.value.channel,
+      config
+    }
   }
 
   updateInbox(payload)
@@ -135,6 +158,14 @@ onMounted(async () => {
     inboxData.oauth = inboxData?.config?.oauth || {}
     inboxData.enable_plus_addressing = inboxData?.config?.enable_plus_addressing || false
     inboxData.reply_to = inboxData?.config?.reply_to || ''
+    // Flatten whatsapp config for the form.
+    if (inboxData.channel === 'whatsapp') {
+      inboxData.config = {
+        account_sid: inboxData?.config?.account_sid || '',
+        auth_token: inboxData?.config?.auth_token || '',
+        from_number: inboxData?.config?.from_number || ''
+      }
+    }
     inbox.value = inboxData
   } catch (error) {
     emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {

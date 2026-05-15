@@ -302,6 +302,9 @@ func (m *Manager) RenderMessageInTemplate(channel string, message *models.Messag
 	case inbox.ChannelLiveChat:
 		// Live chat doesn't use templates for rendering messages.
 		return nil
+	case inbox.ChannelWhatsApp:
+		// WhatsApp messages are plain text; no template rendering needed.
+		return nil
 	default:
 		m.lo.Warn("unknown message channel", "channel", channel)
 		return fmt.Errorf("unknown message channel: %s", channel)
@@ -740,10 +743,11 @@ func (m *Manager) ProcessIncomingMessage(in models.IncomingMessage) (models.Mess
 	// Find or create contact.
 	if senderID == 0 {
 		user := umodels.User{
-			FirstName: in.Contact.FirstName,
-			LastName:  in.Contact.LastName,
-			Email:     in.Contact.Email,
-			Type:      umodels.UserTypeContact,
+			FirstName:   in.Contact.FirstName,
+			LastName:    in.Contact.LastName,
+			Email:       in.Contact.Email,
+			PhoneNumber: in.Contact.PhoneNumber,
+			Type:        umodels.UserTypeContact,
 		}
 		if err := m.userStore.CreateContact(&user); err != nil {
 			return models.Message{}, fmt.Errorf("creating contact: %w", err)

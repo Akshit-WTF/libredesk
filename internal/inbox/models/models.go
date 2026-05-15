@@ -139,6 +139,20 @@ func (m *Inbox) ClearPasswords() error {
 		if m.Secret.Valid && m.Secret.String != "" {
 			m.Secret = null.StringFrom(strings.Repeat(stringutil.PasswordDummy, 10))
 		}
+	case "whatsapp":
+		// Mask the Twilio auth_token in the JSON config.
+		var cfg map[string]interface{}
+		if err := json.Unmarshal(m.Config, &cfg); err != nil {
+			return err
+		}
+		if _, ok := cfg["auth_token"]; ok {
+			cfg["auth_token"] = strings.Repeat(stringutil.PasswordDummy, 10)
+		}
+		cleared, err := json.Marshal(cfg)
+		if err != nil {
+			return err
+		}
+		m.Config = cleared
 	default:
 		return nil
 	}

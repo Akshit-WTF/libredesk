@@ -167,8 +167,8 @@ DO UPDATE SET email = EXCLUDED.email, first_name = EXCLUDED.first_name, last_nam
 RETURNING id;
 
 -- name: insert-contact-without-external-id
-INSERT INTO users (email, type, first_name, last_name, "password", avatar_url, external_user_id)
-VALUES ($1, 'contact', $2, $3, $4, $5, NULL)
+INSERT INTO users (email, type, first_name, last_name, "password", avatar_url, external_user_id, phone_number)
+VALUES ($1, 'contact', $2, $3, $4, $5, NULL, $6)
 ON CONFLICT (email) WHERE type = 'contact' AND deleted_at IS NULL AND external_user_id IS NULL
 DO UPDATE SET updated_at = now()
 RETURNING id;

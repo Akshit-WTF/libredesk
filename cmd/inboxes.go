@@ -13,6 +13,7 @@ import (
 	"github.com/abhinavxd/libredesk/internal/inbox"
 	"github.com/abhinavxd/libredesk/internal/inbox/channel/email/oauth"
 	"github.com/abhinavxd/libredesk/internal/inbox/channel/livechat"
+	"github.com/abhinavxd/libredesk/internal/inbox/channel/whatsapp"
 	imodels "github.com/abhinavxd/libredesk/internal/inbox/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -204,6 +205,27 @@ func validateInbox(app *App, inbox imodels.Inbox) error {
 	}
 	if inbox.Channel == "" {
 		return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "channel"), nil)
+	}
+
+	// Validate whatsapp-specific configuration.
+	if inbox.Channel == whatsapp.ChannelWhatsApp {
+		var cfg whatsapp.Config
+		if err := json.Unmarshal(inbox.Config, &cfg); err != nil {
+			return envelope.NewError(envelope.InputError, app.i18n.T("errors.parsingRequest"), nil)
+		}
+		if cfg.AccountSID == "" {
+			return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "account_sid"), nil)
+		}
+		if cfg.AuthToken == "" {
+			return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "auth_token"), nil)
+		}
+		if cfg.FromNumber == "" {
+			return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "from_number"), nil)
+		}
+		// from_number must start with + (E.164).
+		if cfg.FromNumber[0] != '+' {
+			return envelope.NewError(envelope.InputError, app.i18n.T("validation.invalidValue"), nil)
+		}
 	}
 
 	// Validate livechat-specific configuration

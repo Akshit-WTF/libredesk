@@ -27,7 +27,8 @@
                 </AvatarFallback>
               </Avatar>
               <span class="absolute -bottom-0.5 -right-0.5 flex items-center justify-center w-4 h-4 rounded-full bg-background border border-border">
-                <component :is="conversation.inbox_channel === 'livechat' ? MessageSquare : Mail" class="w-2.5 h-2.5 text-muted-foreground" />
+                <WhatsAppIcon v-if="conversation.inbox_channel === 'whatsapp'" class="w-2.5 h-2.5 text-[#25D366]" />
+                <component v-else :is="conversation.inbox_channel === 'livechat' ? MessageSquare : Mail" class="w-2.5 h-2.5 text-muted-foreground" />
               </span>
             </div>
             <div
@@ -146,6 +147,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getRelativeTime } from '@shared-ui/utils/datetime.js'
 import { Mail, MessageSquare, Reply, MailOpen } from 'lucide-vue-next'
+import WhatsAppIcon from '@/components/icons/WhatsAppIcon.vue'
 import { Avatar, AvatarFallback, AvatarImage } from '@shared-ui/components/ui/avatar'
 import {
   ContextMenu,

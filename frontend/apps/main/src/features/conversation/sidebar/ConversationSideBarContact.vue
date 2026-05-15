@@ -43,7 +43,7 @@
         {{ conversation?.contact?.first_name + ' ' + conversation?.contact?.last_name }}
       </span>
     </div>
-    <div class="flex gap-2 items-center">
+    <div v-if="!isWhatsApp" class="flex gap-2 items-center">
       <Mail size="16" class="text-muted-foreground flex-shrink-0" />
       <Tooltip v-if="isLivechat && !conversationStore.conversation.loading">
         <TooltipTrigger as-child>
@@ -57,15 +57,24 @@
       <span v-if="conversationStore.conversation.loading">
         <Skeleton class="w-32 h-4" />
       </span>
-      <span v-else-if="conversation?.contact?.email" class="sidebar-value break-all">
+      <span v-else-if="!isWhatsApp && conversation?.contact?.email" class="sidebar-value break-all">
         {{ conversation?.contact?.email }}
       </span>
-      <span v-else class="sidebar-label">
+      <span v-else-if="!isWhatsApp" class="sidebar-label">
+        {{ t('conversation.sidebar.notAvailable') }}
+      </span>
+      <span v-else class="sidebar-label text-xs">
         {{ t('conversation.sidebar.notAvailable') }}
       </span>
     </div>
+    <!-- WhatsApp channel indicator -->
+    <div v-if="isWhatsApp && !conversationStore.conversation.loading" class="flex gap-2 items-center">
+      <WhatsAppIcon class="w-4 h-4 flex-shrink-0 text-[#25D366]" />
+      <span class="sidebar-value">{{ $t('conversation.sidebar.viaWhatsApp') }}</span>
+    </div>
     <div class="flex gap-2 items-center">
-      <Phone size="16" class="text-muted-foreground flex-shrink-0" />
+      <WhatsAppIcon v-if="isWhatsApp" class="w-4 h-4 flex-shrink-0 text-[#25D366]" />
+      <Phone v-else size="16" class="text-muted-foreground flex-shrink-0" />
       <span v-if="conversationStore.conversation.loading">
         <Skeleton class="w-32 h-4" />
       </span>
@@ -136,6 +145,7 @@ import {
   ShieldCheck,
   ShieldQuestion
 } from 'lucide-vue-next'
+import WhatsAppIcon from '@/components/icons/WhatsAppIcon.vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@shared-ui/components/ui/tooltip'
 import countries from '@/constants/countries.js'
 import { useEmitter } from '@/composables/useEmitter'
@@ -170,6 +180,7 @@ const countryName = computed(() => {
 })
 
 const isLivechat = computed(() => conversation.value?.inbox_channel === 'livechat')
+const isWhatsApp = computed(() => conversation.value?.inbox_channel === 'whatsapp')
 const contactStatus = computed(() => conversation.value?.contact?.availability_status)
 const isVerified = computed(
   () => isLivechat.value && conversation.value?.contact?.type !== 'visitor'
