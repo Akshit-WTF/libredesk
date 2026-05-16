@@ -37,6 +37,12 @@ func (e *Email) ReadIncomingMessages(ctx context.Context, cfg imodels.IMAPConfig
 		scanInboxSince = defaultScanInboxSince
 	}
 
+	// Run immediately on first start before waiting for the first tick.
+	if err := e.processMailbox(ctx, scanInboxSince, cfg); err != nil && err != context.Canceled {
+		e.lo.Error("error searching emails on initial run", "error", err)
+	}
+	e.lo.Info("email search complete (initial)", "mailbox", cfg.Mailbox, "inbox_id", e.Identifier())
+
 	readTicker := time.NewTicker(readInterval)
 	defer readTicker.Stop()
 
@@ -197,6 +203,7 @@ func (e *Email) fetchAndProcessMessages(ctx context.Context, client *imapclient.
 	var messages []msgData
 
 	fetchCmd := client.Fetch(seqSet, fetchOptions)
+	defer fetchCmd.Close()
 
 	// Extract the inbox email address.
 	inboxEmail, err := stringutil.ExtractEmail(e.FromAddress())
@@ -414,6 +421,7 @@ func (e *Email) processEnvelope(ctx context.Context, client *imapclient.Client, 
 	seqSet.AddNum(seqNum)
 
 	fullFetchCmd := client.Fetch(seqSet, fetchOptions)
+	defer fullFetchCmd.Close()
 	fullMsg := fullFetchCmd.Next()
 	if fullMsg == nil {
 		return nil

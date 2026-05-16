@@ -115,7 +115,7 @@
     <!-- Main Editor non-fullscreen -->
     <div
       class="bg-background text-card-foreground box m-2 px-2 pt-2 flex flex-col"
-      :class="{ '!bg-private': messageType === 'private_note' }"
+hat      :class="{ '!bg-private': messageType === 'private_note' }"
       v-if="!isEditorFullscreen"
     >
       <!-- WhatsApp re-engagement banner (shown only when service window is closed) -->
