@@ -102,10 +102,3 @@ demo-build:
 	@echo "→ Building in demo mode..."
 	@export VITE_DEMO_BUILD="true" && $(MAKE) build
 
-# Run tests.
-.PHONY: test
-test:
-	@echo "→ Running Go tests..."
-	go test -count=1 ./...
-	@echo "→ Running frontend tests..."
-	cd ${FRONTEND_DIR} && bun install && bun run test:run
