@@ -26,26 +26,26 @@ $(STUFFBIN):
 .PHONY: install-deps
 install-deps: $(STUFFBIN)
 	@echo "→ Installing frontend dependencies..."
-	@cd ${FRONTEND_DIR} && pnpm install
+	@cd ${FRONTEND_DIR} && bun install
 
 # Build the frontend for production (both apps).
 .PHONY: frontend-build
 frontend-build: install-deps
 	@echo "→ Building frontend for production - main app & widget..."
-	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && pnpm build:main
-	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && pnpm build:widget
+	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && bun run build:main
+	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && bun run build:widget
 
 # Build only the main frontend app.
 .PHONY: frontend-build-main
 frontend-build-main: install-deps
 	@echo "→ Building main frontend app for production..."
-	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && pnpm build:main
+	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && bun run build:main
 
 # Build only the widget frontend app.
 .PHONY: frontend-build-widget
 frontend-build-widget: install-deps
 	@echo "→ Building widget frontend app for production..."
-	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && pnpm build:widget
+	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && bun run build:widget
 
 # Run the Go backend server in development mode.
 .PHONY: run-backend
@@ -57,25 +57,25 @@ run-backend:
 .PHONY: run-frontend
 run-frontend:
 	@echo "→ Installing frontend dependencies (if not already installed)..."
-	@cd ${FRONTEND_DIR} && pnpm install
+	@cd ${FRONTEND_DIR} && bun install
 	@echo "→ Running main frontend app..."
-	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && pnpm dev:main
+	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && bun run dev:main
 
 # Run the main frontend app in development mode.
 .PHONY: run-frontend-main
 run-frontend-main:
 	@echo "→ Installing frontend dependencies (if not already installed)..."
-	@cd ${FRONTEND_DIR} && pnpm install
+	@cd ${FRONTEND_DIR} && bun install
 	@echo "→ Running main frontend app..."
-	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && pnpm dev:main
+	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && bun run dev:main
 
 # Run the widget frontend app in development mode.
 .PHONY: run-frontend-widget
 run-frontend-widget:
 	@echo "→ Installing frontend dependencies (if not already installed)..."
-	@cd ${FRONTEND_DIR} && pnpm install
+	@cd ${FRONTEND_DIR} && bun install
 	@echo "→ Running widget frontend app..."
-	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && pnpm dev:widget
+	@export VITE_APP_VERSION="${VERSION}" && cd ${FRONTEND_DIR} && bun run dev:widget
 
 # Build the backend binary.
 .PHONY: build-backend
@@ -108,4 +108,4 @@ test:
 	@echo "→ Running Go tests..."
 	go test -count=1 ./...
 	@echo "→ Running frontend tests..."
-	cd ${FRONTEND_DIR} && npx pnpm install --frozen-lockfile && npx pnpm test:run
+	cd ${FRONTEND_DIR} && bun install && bun run test:run

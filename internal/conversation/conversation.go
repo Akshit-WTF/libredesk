@@ -258,6 +258,7 @@ func New(
 type queries struct {
 	// Conversation queries.
 	GetConversationUUID                *sqlx.Stmt `query:"get-conversation-uuid"`
+	GetOpenConversationByContactInbox  *sqlx.Stmt `query:"get-open-conversation-by-contact-inbox"`
 	GetConversation                    *sqlx.Stmt `query:"get-conversation"`
 	GetConversationsCreatedAfter       *sqlx.Stmt `query:"get-conversations-created-after"`
 	GetUnassignedConversations         *sqlx.Stmt `query:"get-unassigned-conversations"`

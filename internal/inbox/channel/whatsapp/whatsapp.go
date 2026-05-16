@@ -127,13 +127,26 @@ func (w *WhatsApp) Send(msg models.OutboundMessage) error {
 		return fmt.Errorf("whatsapp send: resolving recipient phone for contact %d: %w", msg.MessageReceiverID, err)
 	}
 
-	// Use plain text content; Twilio WhatsApp does not support HTML.
-	body := msg.TextContent
+	// Use plain text; Twilio WhatsApp does not render HTML.
+	body := strings.TrimSpace(msg.TextContent)
 	if body == "" {
-		body = msg.Content
+		body = strings.TrimSpace(msg.Content)
 	}
 
-	return w.sendViaTwilio(toNumber, body)
+	// Collect public attachment URLs for Twilio MediaUrl params.
+	var mediaURLs []string
+	for _, a := range msg.Attachments {
+		if a.URL != "" {
+			mediaURLs = append(mediaURLs, a.URL)
+		}
+	}
+
+	if body == "" && len(mediaURLs) == 0 {
+		w.lo.Warn("whatsapp send: empty body and no media, skipping", "message_uuid", msg.UUID)
+		return nil
+	}
+
+	return w.sendViaTwilio(toNumber, body, mediaURLs)
 }
 
 // Close is a no-op; there are no persistent connections to close.
@@ -193,13 +206,19 @@ func PhoneFromPseudoEmail(pseudoEmail string) (string, error) {
 
 // sendViaTwilio sends a WhatsApp message via the Twilio Messages REST API.
 // toNumber must be in Twilio format, e.g. "whatsapp:+1234567890".
-func (w *WhatsApp) sendViaTwilio(toNumber, body string) error {
+// mediaURLs are optional publicly accessible attachment URLs.
+func (w *WhatsApp) sendViaTwilio(toNumber, body string, mediaURLs []string) error {
 	apiURL := fmt.Sprintf("%s/%s/Messages.json", twilioAPIBase, w.config.AccountSID)
 
 	form := url.Values{}
 	form.Set("From", "whatsapp:"+w.config.FromNumber)
 	form.Set("To", toNumber)
-	form.Set("Body", body)
+	if body != "" {
+		form.Set("Body", body)
+	}
+	for _, u := range mediaURLs {
+		form.Add("MediaUrl", u)
+	}
 
 	req, err := http.NewRequest(http.MethodPost, apiURL, strings.NewReader(form.Encode()))
 	if err != nil {

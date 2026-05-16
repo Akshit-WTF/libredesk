@@ -1145,7 +1145,39 @@ func (m *Manager) findOrCreateConversation(in models.IncomingMessage) (int, stri
 		err              error
 	)
 
-	// Search for existing conversation using the in-reply-to and references.
+	// For non-email channels (WhatsApp, etc.), find the most recent open conversation
+	// for this contact+inbox instead of relying on email threading headers.
+	if in.Channel != inbox.ChannelEmail {
+		var id int
+		var uuid string
+		err = m.q.GetOpenConversationByContactInbox.QueryRow(in.Contact.ID, in.InboxID).Scan(&id, &uuid)
+		if err != nil && err != sql.ErrNoRows {
+			return 0, "", false, fmt.Errorf("finding open conversation: %w", err)
+		}
+		if id > 0 {
+			return id, uuid, false, nil
+		}
+		// No open conversation found — create one.
+		lastMessage := stringutil.HTML2Text(in.Content)
+		lastMessageAt := time.Now()
+		conversationID, conversationUUID, err = m.CreateConversation(in.Contact.ID,
+			in.InboxID,
+			lastMessage,
+			lastMessageAt,
+			in.Subject,
+			false,
+			nil,
+			nil,
+			0,
+			0,
+		)
+		if err != nil || conversationID == 0 {
+			return 0, "", false, err
+		}
+		return conversationID, conversationUUID, true, nil
+	}
+
+	// Email: search for existing conversation using the in-reply-to and references.
 	m.lo.Debug("searching conversation using in-reply-to and references", "in_reply_to", in.InReplyTo, "references", in.References)
 
 	sourceIDs := append([]string{in.InReplyTo}, in.References...)
@@ -1225,7 +1257,7 @@ func (m *Manager) GetInlineMediaRefs(message *models.Message) ([]mmodels.Media, 
 	return m.mediaStore.GetByContentIDs(missing, message.ConversationUUID)
 }
 
-// fetchMessageAttachments fetches attachments (also inline images) for a single message ID.
+	// fetchMessageAttachments fetches attachments (also inline images) for a single message ID.
 func (m *Manager) fetchMessageAttachments(messageID int) (attachment.Attachments, error) {
 	var attachments attachment.Attachments
 

@@ -314,6 +314,14 @@ LIMIT 200;
 -- name: get-conversation-uuid
 SELECT uuid from conversations where id = $1;
 
+-- name: get-open-conversation-by-contact-inbox
+SELECT id, uuid FROM conversations
+WHERE contact_id = $1
+  AND inbox_id = $2
+  AND status_id = (SELECT id FROM conversation_statuses WHERE name = 'Open')
+ORDER BY created_at DESC
+LIMIT 1;
+
 -- name: update-conversation-assigned-user
 UPDATE conversations
 SET assigned_user_id = $2,
