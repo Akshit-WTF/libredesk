@@ -20,10 +20,12 @@ import (
 	"github.com/abhinavxd/libredesk/internal/image"
 	"github.com/abhinavxd/libredesk/internal/inbox"
 	"github.com/abhinavxd/libredesk/internal/inbox/channel/livechat"
+	"github.com/abhinavxd/libredesk/internal/inbox/channel/whatsapp"
 	mmodels "github.com/abhinavxd/libredesk/internal/media/models"
 	"github.com/abhinavxd/libredesk/internal/sla"
 	"github.com/abhinavxd/libredesk/internal/stringutil"
 	umodels "github.com/abhinavxd/libredesk/internal/user/models"
+	"github.com/k3a/html2text"
 	wmodels "github.com/abhinavxd/libredesk/internal/webhook/models"
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v9"
@@ -149,6 +151,47 @@ func (m *Manager) sendOutgoingMessage(message models.Message) {
 	inb, err := m.inboxStore.Get(message.InboxID)
 	if handleError(err, "error fetching inbox") {
 		return
+	}
+
+	// WhatsApp 24-hour service-window enforcement.
+	// If the customer has not messaged within the last 24 hours, free-form messages
+	// are not allowed. Hold the agent's reply and send the configured re-engagement
+	// template instead so the customer can re-open the window.
+	if inb.Channel() == inbox.ChannelWhatsApp {
+		tm, err := m.GetLastInboundMessageTime(message.ConversationUUID)
+		if err != nil {
+			m.lo.Error("whatsapp: could not check last inbound time, proceeding with send", "error", err)
+		}
+		outsideWindow := tm.IsZero() || time.Since(tm) > 24*time.Hour
+		if outsideWindow {
+			if tmpl, ok := inb.(inbox.TemplateMessenger); ok && tmpl != nil {
+				// Resolve recipient phone.
+				contact, cErr := m.userStore.GetContactOrVisitor(message.MessageReceiverID, "")
+				if cErr != nil {
+					handleError(cErr, "whatsapp: could not resolve contact for template")
+					return
+				}
+				waInb := inb.(*whatsapp.WhatsApp)
+				toNumber, pErr := whatsapp.PhoneFromPseudoEmail(contact.Email.String)
+				if pErr != nil {
+					handleError(pErr, "whatsapp: could not resolve phone for template")
+					return
+				}
+				// Send the re-engagement template.
+				if sErr := tmpl.SendTemplate(toNumber, waInb.GetConfig().ContentSID); sErr != nil {
+					handleError(sErr, "whatsapp: failed to send re-engagement template")
+					return
+				}
+				// Hold the agent's original reply until the customer re-opens the window.
+				m.UpdateMessageStatus(message.UUID, models.MessageStatusAwaitingWindow)
+				m.lo.Info("whatsapp: service window closed; template sent, agent reply queued", "conversation_uuid", message.ConversationUUID)
+			} else {
+				// No template configured — hold the message silently, log a warning.
+				m.UpdateMessageStatus(message.UUID, models.MessageStatusAwaitingWindow)
+				m.lo.Warn("whatsapp: service window closed and no template configured; agent reply queued", "conversation_uuid", message.ConversationUUID)
+			}
+			return
+		}
 	}
 
 	// Render content in template
@@ -303,7 +346,9 @@ func (m *Manager) RenderMessageInTemplate(channel string, message *models.Messag
 		// Live chat doesn't use templates for rendering messages.
 		return nil
 	case inbox.ChannelWhatsApp:
-		// WhatsApp messages are plain text; no template rendering needed.
+		// WhatsApp only supports plain text. Strip any HTML that may have been
+		// inserted by automation rules or other automated senders.
+		message.Content = strings.TrimSpace(html2text.HTML2Text(message.Content))
 		return nil
 	default:
 		m.lo.Warn("unknown message channel", "channel", channel)
@@ -391,6 +436,30 @@ func (m *Manager) MarkMessageAsPending(uuid string) error {
 	if err := m.UpdateMessageStatus(uuid, models.MessageStatusPending); err != nil {
 		m.lo.Error("error marking message as pending", "uuid", uuid, "error", err)
 		return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.errorSendingMessage"), nil)
+	}
+	return nil
+}
+
+// GetLastInboundMessageTime returns the created_at of the most recent inbound customer
+// message in a conversation, or a zero Time if none exists yet.
+// Implements inbox.MessageStore so the WhatsApp inbox can check the service window.
+func (m *Manager) GetLastInboundMessageTime(conversationUUID string) (time.Time, error) {
+	var t sql.NullTime
+	if err := m.q.GetLastInboundMessageAt.QueryRow(conversationUUID).Scan(&t); err != nil {
+		return time.Time{}, fmt.Errorf("get last inbound message time: %w", err)
+	}
+	if !t.Valid {
+		return time.Time{}, nil
+	}
+	return t.Time, nil
+}
+
+// ReleaseAwaitingWindowMessages promotes all awaiting_window messages for a conversation
+// back to pending so the outgoing dispatcher picks them up.
+func (m *Manager) ReleaseAwaitingWindowMessages(conversationUUID string) error {
+	if _, err := m.q.ReleaseAwaitingWindowMessages.Exec(conversationUUID); err != nil {
+		m.lo.Error("error releasing awaiting-window messages", "conversation_uuid", conversationUUID, "error", err)
+		return err
 	}
 	return nil
 }
@@ -792,6 +861,14 @@ func (m *Manager) ProcessIncomingMessage(in models.IncomingMessage) (models.Mess
 	// Insert message.
 	if err = m.InsertMessage(&msg); err != nil {
 		return models.Message{}, err
+	}
+
+	// When a customer messages, the WhatsApp 24-hour service window reopens.
+	// Promote any agent replies that were held in awaiting_window back to pending.
+	if in.Channel == inbox.ChannelWhatsApp {
+		if rErr := m.ReleaseAwaitingWindowMessages(msg.ConversationUUID); rErr != nil {
+			m.lo.Error("whatsapp: could not release awaiting-window messages", "conversation_uuid", msg.ConversationUUID, "error", rErr)
+		}
 	}
 
 	// When a customer replies to a continuity emailsync the message to their live chat widget via WebSocket.

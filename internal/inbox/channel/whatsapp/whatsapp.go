@@ -39,6 +39,10 @@ type Config struct {
 	AuthToken  string `json:"auth_token"`
 	// FromNumber is the Twilio WhatsApp-enabled number in E.164 format, e.g. "+14155238886".
 	FromNumber string `json:"from_number"`
+	// ContentSID is the Twilio Content template SID (starts with HX) sent when the
+	// customer's 24-hour service window has closed. Optional; if empty, out-of-window
+	// replies are held until the customer re-opens the window by messaging first.
+	ContentSID string `json:"content_sid"`
 }
 
 // WhatsApp implements inbox.Inbox for a Twilio-backed WhatsApp channel.
@@ -147,6 +151,44 @@ func (w *WhatsApp) Send(msg models.OutboundMessage) error {
 	}
 
 	return w.sendViaTwilio(toNumber, body, mediaURLs)
+}
+
+// SendTemplate sends a pre-approved Twilio Content template message to a recipient.
+// toNumber must be in Twilio WhatsApp format, e.g. "whatsapp:+1234567890".
+// contentSID is the Twilio Content template SID (e.g. "HXabc123...").
+func (w *WhatsApp) SendTemplate(toNumber, contentSID string) error {
+	apiURL := fmt.Sprintf("%s/%s/Messages.json", twilioAPIBase, w.config.AccountSID)
+
+	form := url.Values{}
+	form.Set("From", "whatsapp:"+w.config.FromNumber)
+	form.Set("To", toNumber)
+	form.Set("ContentSid", contentSID)
+
+	req, err := http.NewRequest(http.MethodPost, apiURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return fmt.Errorf("creating twilio template request: %w", err)
+	}
+	req.SetBasicAuth(w.config.AccountSID, w.config.AuthToken)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := w.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("calling twilio api (template): %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("twilio template api error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	w.lo.Info("whatsapp template message sent via twilio", "to", toNumber, "content_sid", contentSID, "status", resp.StatusCode)
+	return nil
+}
+
+// HasTemplate reports whether a re-engagement template is configured for this inbox.
+func (w *WhatsApp) HasTemplate() bool {
+	return w.config.ContentSID != ""
 }
 
 // Close is a no-op; there are no persistent connections to close.

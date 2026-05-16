@@ -16,6 +16,7 @@ import (
 	"github.com/abhinavxd/libredesk/internal/attachment"
 	cmodels "github.com/abhinavxd/libredesk/internal/conversation/models"
 	"github.com/abhinavxd/libredesk/internal/envelope"
+	"github.com/abhinavxd/libredesk/internal/inbox"
 	"github.com/abhinavxd/libredesk/internal/inbox/channel/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/volatiletech/null/v9"
@@ -235,4 +236,58 @@ func twilioEmptyResponse(r *fastglue.Request) error {
 	r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
 	r.RequestCtx.SetBodyString(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`)
 	return nil
+}
+
+// handleSendWhatsAppReEngagement sends the configured re-engagement template for a
+// WhatsApp conversation, allowing agents to proactively re-open the 24-hour service window.
+func handleSendWhatsAppReEngagement(r *fastglue.Request) error {
+	var (
+		app  = r.Context.(*App)
+		uuid = r.RequestCtx.UserValue("uuid").(string)
+	)
+
+	// Fetch conversation to get inbox info and contact.
+	conv, err := app.conversation.GetConversation(0, uuid, "")
+	if err != nil {
+		return sendErrorEnvelope(r, err)
+	}
+
+	if conv.InboxChannel != inbox.ChannelWhatsApp {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "conversation is not a WhatsApp conversation", nil, envelope.InputError)
+	}
+
+	// Get the inbox instance.
+	inb, err := app.inbox.Get(conv.InboxID)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.GeneralError)
+	}
+
+	tmpl, ok := inb.(inbox.TemplateMessenger)
+	if !ok {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "inbox does not support template messages", nil, envelope.InputError)
+	}
+
+	waInb, ok := inb.(*whatsapp.WhatsApp)
+	if !ok || !waInb.HasTemplate() {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "no re-engagement template configured for this inbox", nil, envelope.InputError)
+	}
+
+	// Resolve recipient phone from contact pseudo-email.
+	contact, err := app.user.GetContactOrVisitor(conv.ContactID, "")
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.GeneralError)
+	}
+	toNumber, err := whatsapp.PhoneFromPseudoEmail(contact.Email.String)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "could not resolve WhatsApp number for contact", nil, envelope.InputError)
+	}
+
+	cfg := waInb.GetConfig()
+	if err := tmpl.SendTemplate(toNumber, cfg.ContentSID); err != nil {
+		app.lo.Error("whatsapp re-engagement: failed to send template", "conversation_uuid", uuid, "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.GeneralError)
+	}
+
+	app.lo.Info("whatsapp re-engagement template sent", "conversation_uuid", uuid)
+	return r.SendEnvelope(true)
 }

@@ -103,6 +103,20 @@
       </FormItem>
     </FormField>
 
+    <!-- Re-engagement template (24h window) -->
+    <FormField v-slot="{ componentField }" name="config.content_sid">
+      <FormItem>
+        <FormLabel>{{ $t('admin.inbox.whatsapp.contentSid') }}</FormLabel>
+        <FormControl>
+          <Input type="text" placeholder="HXabc123..." v-bind="componentField" />
+        </FormControl>
+        <FormDescription>
+          {{ $t('admin.inbox.whatsapp.contentSid.description') }}
+        </FormDescription>
+        <FormMessage />
+      </FormItem>
+    </FormField>
+
     <Button type="submit" :disabled="isLoading">
       {{ submitLabel }}
     </Button>
@@ -181,7 +195,8 @@ const form = useForm({
     config: {
       account_sid: props.initialValues?.config?.account_sid ?? '',
       auth_token: props.initialValues?.config?.auth_token ?? '',
-      from_number: props.initialValues?.config?.from_number ?? ''
+      from_number: props.initialValues?.config?.from_number ?? '',
+      content_sid: props.initialValues?.config?.content_sid ?? ''
     }
   }
 })

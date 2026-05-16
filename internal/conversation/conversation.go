@@ -127,6 +127,7 @@ type teamStore interface {
 type userStore interface {
 	Get(int, string, []string) (umodels.User, error)
 	GetAgent(int, string) (umodels.User, error)
+	GetContactOrVisitor(int, string) (umodels.User, error)
 	GetSystemUser() (umodels.User, error)
 	CreateContact(user *umodels.User) error
 	UpgradeVisitorToContact(visitorID int) error
@@ -301,6 +302,8 @@ type queries struct {
 	GetMessage                         *sqlx.Stmt `query:"get-message"`
 	GetMessages                        string     `query:"get-messages"`
 	GetOutgoingPendingMessages         *sqlx.Stmt `query:"get-outgoing-pending-messages"`
+	GetLastInboundMessageAt            *sqlx.Stmt `query:"get-last-inbound-message-at"`
+	ReleaseAwaitingWindowMessages      *sqlx.Stmt `query:"release-awaiting-window-messages"`
 	GetMessageSourceIDs                *sqlx.Stmt `query:"get-message-source-ids"`
 	GetConversationUUIDFromMessageUUID *sqlx.Stmt `query:"get-conversation-uuid-from-message-uuid"`
 	MessageExistsBySourceID            *sqlx.Stmt `query:"message-exists-by-source-id"`
@@ -1362,10 +1365,18 @@ func (m *Manager) RemoveConversationAssignee(uuid, typ string, actor umodels.Use
 
 // SendCSATReply sends a CSAT reply message to a conversation. No-op if one was already sent or contact has no email.
 func (m *Manager) SendCSATReply(actorUserID int, conversation models.Conversation) error {
-	if conversation.Contact.Email.String == "" {
+	// For email: require a real email address (not a pseudo-email from other channels).
+	if conversation.InboxChannel == inbox.ChannelEmail && conversation.Contact.Email.String == "" {
 		m.lo.Info("CSAT reply skipped: contact has no email for conversation: %s", "conversation_uuid", conversation.UUID)
 		return nil
 	}
+
+	// Only email and WhatsApp channels are supported for CSAT.
+	if conversation.InboxChannel != inbox.ChannelEmail && conversation.InboxChannel != inbox.ChannelWhatsApp {
+		m.lo.Info("CSAT reply skipped: unsupported channel", "channel", conversation.InboxChannel, "conversation_uuid", conversation.UUID)
+		return nil
+	}
+
 	csatResp, err := m.csatStore.Create(conversation.ID)
 	if err != nil {
 		if errors.Is(err, csat.ErrCSATAlreadyExists) {
@@ -1379,7 +1390,24 @@ func (m *Manager) SendCSATReply(actorUserID int, conversation models.Conversatio
 	}
 	csatPublicURL := m.csatStore.MakePublicURL(appRootURL, csatResp.UUID)
 
-	// Render CSAT email template.
+	meta := map[string]any{
+		"is_csat":      true,
+		"is_automated": true,
+		"csat_uuid":    csatResp.UUID,
+	}
+
+	if conversation.InboxChannel == inbox.ChannelWhatsApp {
+		// Send a plain-text CSAT message on WhatsApp — no HTML template.
+		content := fmt.Sprintf("We'd love to hear your feedback! Please rate your experience:\n%s", csatPublicURL)
+		_, err = m.QueueReply(nil, conversation.InboxID, actorUserID, conversation.ContactID, conversation.UUID, content, nil, nil, nil, meta)
+		if err != nil {
+			m.lo.Error("error sending WhatsApp CSAT reply", "conversation_uuid", conversation.UUID, "error", err)
+			return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
+		}
+		return nil
+	}
+
+	// Email: render the full HTML CSAT email template.
 	data, err := m.BuildTemplateData(conversation.UUID, actorUserID)
 	if err != nil {
 		m.lo.Error("error building CSAT template data", "conversation_uuid", conversation.UUID, "error", err)
@@ -1391,12 +1419,6 @@ func (m *Manager) SendCSATReply(actorUserID int, conversation models.Conversatio
 	if err != nil {
 		m.lo.Error("error rendering CSAT template", "conversation_uuid", conversation.UUID, "error", err)
 		return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
-	}
-
-	meta := map[string]any{
-		"is_csat":      true,
-		"is_automated": true,
-		"csat_uuid":    csatResp.UUID,
 	}
 
 	// Only send CSAT to contact.

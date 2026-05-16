@@ -13,7 +13,8 @@
           <!-- Form Fields Section -->
           <div class="space-y-4 pb-2 flex-shrink-0">
             <div class="space-y-2">
-              <FormField name="contact_email">
+              <!-- Email contact search (email inboxes) -->
+              <FormField v-if="!selectedInboxIsWhatsApp" name="contact_email">
                 <FormItem class="relative">
                   <FormLabel>{{ $t('globals.terms.email') }}</FormLabel>
                   <FormControl>
@@ -65,6 +66,30 @@
                   </div>
                 </FormItem>
               </FormField>
+
+              <!-- Phone number input (WhatsApp inboxes) -->
+              <FormField v-if="selectedInboxIsWhatsApp" name="contact_email">
+                <FormItem>
+                  <FormLabel>{{ $t('globals.terms.phoneNumber') }}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="tel"
+                      :placeholder="t('conversation.whatsapp.phonePlaceholder')"
+                      v-model="phoneNumber"
+                      autocomplete="off"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              </FormField>
+
+              <!-- WhatsApp template info banner -->
+              <div
+                v-if="selectedInboxIsWhatsApp"
+                class="flex items-start gap-2 px-3 py-2 rounded bg-muted border border-border text-sm text-muted-foreground"
+              >
+                <span>{{ $t('conversation.whatsapp.newConversationInfo') }}</span>
+              </div>
 
               <!-- Name Group -->
               <div class="grid grid-cols-2 gap-4">
@@ -123,7 +148,7 @@
                         <SelectContent>
                           <SelectGroup>
                             <SelectItem
-                              v-for="option in inboxStore.emailOptions"
+                              v-for="option in outboundInboxOptions"
                               :key="option.value"
                               :value="option.value"
                             >
@@ -318,6 +343,15 @@ const emitter = useEmitter()
 const loading = ref(false)
 const searchResults = ref([])
 const emailQuery = ref('')
+const phoneNumber = ref('')
+
+const outboundInboxOptions = computed(() => [
+  ...inboxStore.emailOptions,
+  ...inboxStore.inboxes
+    .filter((inb) => inb.channel === 'whatsapp')
+    .map((inb) => ({ label: inb.name, value: String(inb.id) }))
+])
+
 const conversationStore = useConversationStore()
 const macroStore = useMacroStore()
 let timeoutId = null
@@ -353,12 +387,18 @@ const formSchema = z.object({
   content: z.string().min(1, t('validation.messageCannotBeEmpty')),
   inbox_id: z
     .any()
-    .refine((val) => inboxStore.emailOptions.some((option) => option.value === val), {
+    .refine((val) => outboundInboxOptions.value.some((option) => option.value === val), {
       message: t('globals.messages.required')
     }),
   team_id: z.any().optional(),
   agent_id: z.any().optional(),
-  contact_email: z.string().email(t('validation.invalidEmail')),
+  contact_email: z
+    .string()
+    .min(1, t('globals.messages.required'))
+    .refine(
+      (val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) || val.endsWith('@wa.phone'),
+      { message: t('validation.invalidEmail') }
+    ),
   first_name: z.string().min(1, t('globals.messages.required')),
   last_name: z.string().optional()
 })
@@ -398,12 +438,40 @@ const form = useForm({
   }
 })
 
+const selectedInboxIsWhatsApp = computed(() => {
+  const inboxId = form.values?.inbox_id
+  if (!inboxId) return false
+  return inboxStore.inboxes.some(
+    (inb) => inb.channel === 'whatsapp' && String(inb.id) === String(inboxId)
+  )
+})
+
 watch(emailQuery, (newVal) => {
   form.setFieldValue('contact_email', newVal)
   if (selectedContact.value && newVal !== selectedContact.value.email) {
     selectedContact.value = null
     form.setFieldValue('first_name', '')
     form.setFieldValue('last_name', '')
+  }
+})
+
+watch(phoneNumber, (val) => {
+  const trimmed = val.trim()
+  form.setFieldValue('contact_email', trimmed ? trimmed + '@wa.phone' : '')
+  if (trimmed && !form.values.first_name) {
+    form.setFieldValue('first_name', trimmed)
+  }
+})
+
+watch(selectedInboxIsWhatsApp, (isWA) => {
+  if (isWA) {
+    selectedContact.value = null
+    searchResults.value.splice(0)
+    emailQuery.value = ''
+    form.setFieldValue('contact_email', phoneNumber.value.trim() ? phoneNumber.value.trim() + '@wa.phone' : '')
+  } else {
+    phoneNumber.value = ''
+    form.setFieldValue('contact_email', emailQuery.value)
   }
 })
 

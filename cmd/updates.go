@@ -41,8 +41,8 @@ var reSemver = regexp.MustCompile(`-(.*)`)
 // at the given intervals. On detecting a new update (new semver), it
 // sets the global update status that renders a prompt on the UI.
 func checkUpdates(curVersion string, interval time.Duration, app *App) {
-	// Strip -* suffix.
-	curVersion = reSemver.ReplaceAllString(curVersion, "")
+	// Update checks disabled for fork.
+	return
 
 	fnCheck := func() {
 		resp, err := http.Get(updateCheckURL)

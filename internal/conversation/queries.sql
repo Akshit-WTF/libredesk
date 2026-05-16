@@ -582,6 +582,24 @@ INNER JOIN conversations c ON c.id = m.conversation_id
 WHERE m.status = 'pending' AND m.type = 'outgoing' AND m.private = false
 AND NOT(m.id = ANY($1::INT[]))
 
+-- name: get-last-inbound-message-at
+-- Returns the created_at of the most recent inbound (customer) message in a conversation.
+-- Returns NULL if no inbound message exists yet.
+SELECT MAX(m.created_at)
+FROM conversation_messages m
+INNER JOIN conversations c ON c.id = m.conversation_id
+WHERE c.uuid = $1 AND m.type = 'incoming';
+
+-- name: release-awaiting-window-messages
+-- Promotes awaiting_window messages back to pending so the dispatcher picks them up.
+UPDATE conversation_messages m
+SET status = 'pending', updated_at = NOW()
+FROM conversations c
+WHERE c.id = m.conversation_id
+  AND c.uuid = $1
+  AND m.status = 'awaiting_window'
+  AND m.type = 'outgoing';
+
 -- name: get-message
 SELECT
     m.id,

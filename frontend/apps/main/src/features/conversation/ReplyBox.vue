@@ -118,6 +118,22 @@
       :class="{ '!bg-private': messageType === 'private_note' }"
       v-if="!isEditorFullscreen"
     >
+      <!-- WhatsApp re-engagement banner -->
+      <div
+        v-if="conversationStore.current?.inbox_channel === 'whatsapp'"
+        class="flex items-center justify-between mb-2 px-3 py-2 rounded bg-muted border border-border text-sm"
+      >
+        <span class="text-muted-foreground">{{ $t('replyBox.whatsapp.windowHint') }}</span>
+        <Button
+          size="sm"
+          variant="outline"
+          :disabled="isSendingReEngagement"
+          :isLoading="isSendingReEngagement"
+          @click="sendReEngagement"
+        >
+          {{ $t('replyBox.whatsapp.sendReEngagement') }}
+        </Button>
+      </div>
       <ReplyBoxContent
         ref="replyBoxContentRef"
         :isFullscreen="false"
@@ -235,6 +251,7 @@ const openAIKeyPrompt = ref(false)
 const isOpenAIKeyUpdating = ref(false)
 const isEditorFullscreen = ref(false)
 const isSending = ref(false)
+const isSendingReEngagement = ref(false)
 const messageType = useStorage('replyBoxMessageType', 'reply')
 const to = ref('')
 const cc = ref('')
@@ -246,6 +263,26 @@ const replyBoxContentRef = ref(null)
 const showContactEmailWarning = ref(false)
 const showMissingTagsWarning = ref(false)
 const mentions = ref([])
+
+/**
+ * Sends the configured WhatsApp re-engagement template to reopen the 24-hour service window.
+ */
+const sendReEngagement = async () => {
+  isSendingReEngagement.value = true
+  try {
+    await api.sendWhatsAppReEngagement(conversationStore.current.uuid)
+    emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
+      description: t('replyBox.whatsapp.reEngagementSent')
+    })
+  } catch (error) {
+    emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
+      variant: 'destructive',
+      description: handleHTTPError(error).message
+    })
+  } finally {
+    isSendingReEngagement.value = false
+  }
+}
 
 /**
  * Fetches AI prompts from the server.

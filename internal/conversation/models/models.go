@@ -39,10 +39,11 @@ var (
 	MentionTypeAgent = "agent"
 	MentionTypeTeam  = "team"
 
-	MessageStatusPending  = "pending"
-	MessageStatusSent     = "sent"
-	MessageStatusFailed   = "failed"
-	MessageStatusReceived = "received"
+	MessageStatusPending        = "pending"
+	MessageStatusSent           = "sent"
+	MessageStatusFailed         = "failed"
+	MessageStatusReceived       = "received"
+	MessageStatusAwaitingWindow = "awaiting_window" // WhatsApp: agent reply held until customer reopens the 24h window
 
 	ActivityStatusChange       = "status_change"
 	ActivityPriorityChange     = "priority_change"

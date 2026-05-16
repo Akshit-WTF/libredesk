@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/abhinavxd/libredesk/internal/conversation/models"
 	"github.com/abhinavxd/libredesk/internal/crypto"
@@ -72,6 +73,13 @@ type Inbox interface {
 type MessageStore interface {
 	MessageExists(string) (bool, error)
 	EnqueueIncoming(models.IncomingMessage) error
+	GetLastInboundMessageTime(conversationUUID string) (time.Time, error)
+}
+
+// TemplateMessenger is optionally implemented by channels that support
+// pre-approved message templates (e.g. WhatsApp outside the 24-hour window).
+type TemplateMessenger interface {
+	SendTemplate(toNumber, contentSID string) error
 }
 
 // UserStore defines methods for fetching user information.
