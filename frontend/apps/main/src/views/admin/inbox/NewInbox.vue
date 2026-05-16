@@ -175,7 +175,8 @@ const submitWhatsAppForm = (values) => {
     config: {
       account_sid: values.config.account_sid,
       auth_token: values.config.auth_token,
-      from_number: values.config.from_number
+      from_number: values.config.from_number,
+      content_sid: values.config.content_sid ?? ''
     }
   }
   createInbox(payload)

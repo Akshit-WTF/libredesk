@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	amodels "github.com/abhinavxd/libredesk/internal/auth/models"
@@ -11,6 +12,7 @@ import (
 	"github.com/abhinavxd/libredesk/internal/automation/models"
 	cmodels "github.com/abhinavxd/libredesk/internal/conversation/models"
 	"github.com/abhinavxd/libredesk/internal/envelope"
+	"github.com/abhinavxd/libredesk/internal/inbox/channel/whatsapp"
 	"github.com/abhinavxd/libredesk/internal/stringutil"
 	umodels "github.com/abhinavxd/libredesk/internal/user/models"
 	vmodels "github.com/abhinavxd/libredesk/internal/view/models"
@@ -873,7 +875,7 @@ func validateCreateConversationRequest(req createConversationRequest, app *App) 
 	if req.FirstName == "" {
 		return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.required", "name", "`first_name`"), nil)
 	}
-	if !stringutil.ValidEmail(req.Email) {
+	if !stringutil.ValidEmail(req.Email) && !strings.HasSuffix(req.Email, whatsapp.PhoneSuffix) {
 		return envelope.NewError(envelope.InputError, app.i18n.T("validation.invalidEmail"), nil)
 	}
 	if req.Initiator != umodels.UserTypeContact && req.Initiator != umodels.UserTypeAgent {
@@ -888,7 +890,7 @@ func validateCreateConversationRequest(req createConversationRequest, app *App) 
 	if !inbox.Enabled {
 		return envelope.NewError(envelope.InputError, app.i18n.T("globals.messages.disabled"), nil)
 	}
-	if inbox.Channel != "email" {
+	if inbox.Channel != "email" && inbox.Channel != "whatsapp" {
 		return envelope.NewError(envelope.InputError, app.i18n.T("globals.messages.somethingWentWrong"), nil)
 	}
 

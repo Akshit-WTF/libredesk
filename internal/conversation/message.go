@@ -25,8 +25,8 @@ import (
 	"github.com/abhinavxd/libredesk/internal/sla"
 	"github.com/abhinavxd/libredesk/internal/stringutil"
 	umodels "github.com/abhinavxd/libredesk/internal/user/models"
-	"github.com/k3a/html2text"
 	wmodels "github.com/abhinavxd/libredesk/internal/webhook/models"
+	"github.com/k3a/html2text"
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v9"
 )
@@ -1334,7 +1334,7 @@ func (m *Manager) GetInlineMediaRefs(message *models.Message) ([]mmodels.Media, 
 	return m.mediaStore.GetByContentIDs(missing, message.ConversationUUID)
 }
 
-	// fetchMessageAttachments fetches attachments (also inline images) for a single message ID.
+// fetchMessageAttachments fetches attachments (also inline images) for a single message ID.
 func (m *Manager) fetchMessageAttachments(messageID int) (attachment.Attachments, error) {
 	var attachments attachment.Attachments
 

@@ -28,7 +28,7 @@ import (
 // Twilio expects a 200 OK with a TwiML <Response/> body (empty response suppresses any reply).
 func handleTwilioWhatsAppWebhook(r *fastglue.Request) error {
 	var (
-		app      = r.Context.(*App)
+		app       = r.Context.(*App)
 		inboxUUID = r.RequestCtx.UserValue("uuid").(string)
 	)
 
