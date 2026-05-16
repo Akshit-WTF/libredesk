@@ -73,7 +73,8 @@ func New(cfg Config, i18n *i18n.I18n, rd *redis.Client, logger *logf.Logger) (*A
 	verifiers := make(map[int]*oidc.IDTokenVerifier)
 
 	for _, provider := range cfg.Providers {
-		oidcProv, err := oidc.NewProvider(context.Background(), provider.ProviderURL)
+		oidcCtx := oidc.InsecureIssuerURLContext(context.Background(), provider.ProviderURL)
+		oidcProv, err := oidc.NewProvider(oidcCtx, provider.ProviderURL)
 		if err != nil {
 			logger.Error("error initializing oidc provider", "error", err, "provider", provider.Provider)
 			continue
@@ -128,7 +129,8 @@ func New(cfg Config, i18n *i18n.I18n, rd *redis.Client, logger *logf.Logger) (*A
 
 // TestProvider tests the OIDC provider url by doing a discovery on it.
 func (a *Auth) TestProvider(url string) error {
-	_, err := oidc.NewProvider(context.Background(), url)
+	oidcCtx := oidc.InsecureIssuerURLContext(context.Background(), url)
+	_, err := oidc.NewProvider(oidcCtx, url)
 	if err != nil {
 		a.logger.Error("error testing oidc provider", "provider_url", url, "error", err)
 		return envelope.NewError(envelope.GeneralError, err.Error(), nil)
@@ -145,7 +147,8 @@ func (a *Auth) Reload(cfg Config) error {
 	verifiers := make(map[int]*oidc.IDTokenVerifier)
 
 	for _, provider := range cfg.Providers {
-		oidcProv, err := oidc.NewProvider(context.Background(), provider.ProviderURL)
+		oidcCtx := oidc.InsecureIssuerURLContext(context.Background(), provider.ProviderURL)
+		oidcProv, err := oidc.NewProvider(oidcCtx, provider.ProviderURL)
 		if err != nil {
 			a.logger.Error("error initializing oidc provider", "provider", provider.Provider, "provider_url", provider.ProviderURL, "error", err)
 			return envelope.NewError(envelope.GeneralError, err.Error(), nil)
