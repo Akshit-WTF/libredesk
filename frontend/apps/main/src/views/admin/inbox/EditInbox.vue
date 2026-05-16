@@ -106,6 +106,7 @@ const submitForm = (values) => {
       account_sid: values.config.account_sid,
       auth_token: values.config.auth_token,
       from_number: values.config.from_number,
+      init_content_sid: values.config.init_content_sid ?? '',
       content_sid: values.config.content_sid ?? ''
     }
     // Skip masked auth_token (unchanged)
@@ -164,7 +165,9 @@ onMounted(async () => {
       inboxData.config = {
         account_sid: inboxData?.config?.account_sid || '',
         auth_token: inboxData?.config?.auth_token || '',
-        from_number: inboxData?.config?.from_number || ''
+        from_number: inboxData?.config?.from_number || '',
+        init_content_sid: inboxData?.config?.init_content_sid || '',
+        content_sid: inboxData?.config?.content_sid || ''
       }
     }
     inbox.value = inboxData

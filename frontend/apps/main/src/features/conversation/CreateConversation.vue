@@ -348,7 +348,7 @@ const phoneNumber = ref('')
 const outboundInboxOptions = computed(() => [
   ...inboxStore.emailOptions,
   ...inboxStore.inboxes
-    .filter((inb) => inb.channel === 'whatsapp')
+    .filter((inb) => inb.channel === 'whatsapp' && inb.config?.init_content_sid)
     .map((inb) => ({ label: inb.name, value: String(inb.id) }))
 ])
 
@@ -458,9 +458,6 @@ watch(emailQuery, (newVal) => {
 watch(phoneNumber, (val) => {
   const trimmed = val.trim()
   form.setFieldValue('contact_email', trimmed ? trimmed + '@wa.phone' : '')
-  if (trimmed && !form.values.first_name) {
-    form.setFieldValue('first_name', trimmed)
-  }
 })
 
 watch(selectedInboxIsWhatsApp, (isWA) => {

@@ -85,6 +85,9 @@ type Manager struct {
 	wg                         sync.WaitGroup
 	continuityConfig           ContinuityConfig
 	subjectRefFormat           string
+	// templateRateLimiter gates WhatsApp template sends to prevent spamming.
+	// Returns true if a template may be sent to the given phone number.
+	templateRateLimiter func(phone string) bool
 }
 
 // WidgetConversationView represents the conversation data for widget clients
@@ -182,6 +185,8 @@ type Opts struct {
 	IncomingMessageQueueSize int
 	ContinuityConfig         *ContinuityConfig
 	SubjectRefFormat         string
+	// TemplateRateLimiter gates WhatsApp template sends. If nil, no rate limiting is applied.
+	TemplateRateLimiter func(phone string) bool
 }
 
 // New initializes a new conversation Manager.
@@ -251,6 +256,7 @@ func New(
 		outgoingProcessingMessages: sync.Map{},
 		continuityConfig:           continuityConfig,
 		subjectRefFormat:           subjectRefFormat,
+		templateRateLimiter:        opts.TemplateRateLimiter,
 	}
 
 	return c, nil

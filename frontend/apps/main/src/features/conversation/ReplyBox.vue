@@ -118,9 +118,9 @@
       :class="{ '!bg-private': messageType === 'private_note' }"
       v-if="!isEditorFullscreen"
     >
-      <!-- WhatsApp re-engagement banner -->
+      <!-- WhatsApp re-engagement banner (shown only when service window is closed) -->
       <div
-        v-if="conversationStore.current?.inbox_channel === 'whatsapp'"
+        v-if="conversationStore.whatsappWindowClosed"
         class="flex items-center justify-between mb-2 px-3 py-2 rounded bg-muted border border-border text-sm"
       >
         <span class="text-muted-foreground">{{ $t('replyBox.whatsapp.windowHint') }}</span>

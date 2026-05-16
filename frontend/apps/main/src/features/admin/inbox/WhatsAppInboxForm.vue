@@ -57,7 +57,7 @@
     <div v-if="webhookURL" class="space-y-1">
       <p class="text-sm font-medium leading-none">{{ $t('admin.inbox.whatsapp.webhookUrl') }}</p>
       <div class="flex items-center gap-2">
-        <Input type="text" :value="webhookURL" readonly class="font-mono text-xs" />
+        <Input type="text" :model-value="webhookURL" readonly class="font-mono text-xs" />
         <Button type="button" variant="outline" size="sm" @click="copyWebhookURL">
           {{ copied ? $t('globals.messages.copied') : $t('globals.messages.copy') }}
         </Button>
@@ -103,6 +103,20 @@
       </FormItem>
     </FormField>
 
+    <!-- Initiation template (first outbound message) -->
+    <FormField v-slot="{ componentField }" name="config.init_content_sid">
+      <FormItem>
+        <FormLabel>{{ $t('admin.inbox.whatsapp.initContentSid') }}</FormLabel>
+        <FormControl>
+          <Input type="text" placeholder="HXabc123..." v-bind="componentField" />
+        </FormControl>
+        <FormDescription>
+          {{ $t('admin.inbox.whatsapp.initContentSid.description') }}
+        </FormDescription>
+        <FormMessage />
+      </FormItem>
+    </FormField>
+
     <!-- Re-engagement template (24h window) -->
     <FormField v-slot="{ componentField }" name="config.content_sid">
       <FormItem>
@@ -118,7 +132,7 @@
     </FormField>
 
     <Button type="submit" :disabled="isLoading">
-      {{ submitLabel }}
+      {{ resolvedSubmitLabel }}
     </Button>
   </form>
 </template>
@@ -179,7 +193,7 @@ const webhookURL = computed(() => {
   return `${base}/api/v1/inboxes/whatsapp/${uuid}/webhook`
 })
 
-const submitLabel = computed(
+const resolvedSubmitLabel = computed(
   () =>
     props.submitLabel ||
     (props.isNewForm ? t('globals.messages.create') : t('globals.messages.save'))
@@ -196,6 +210,7 @@ const form = useForm({
       account_sid: props.initialValues?.config?.account_sid ?? '',
       auth_token: props.initialValues?.config?.auth_token ?? '',
       from_number: props.initialValues?.config?.from_number ?? '',
+      init_content_sid: props.initialValues?.config?.init_content_sid ?? '',
       content_sid: props.initialValues?.config?.content_sid ?? ''
     }
   }

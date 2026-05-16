@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -22,6 +23,30 @@ import (
 	"github.com/volatiletech/null/v9"
 	"github.com/zerodha/fastglue"
 )
+
+const whatsappTemplateCooldown = 24 * time.Hour
+
+// whatsappTemplateLimitKey returns the Redis key used to rate-limit template sends
+// to a given WhatsApp number. Keyed by E.164 phone number so the cooldown applies
+// across all conversations with the same contact.
+func whatsappTemplateLimitKey(phone string) string {
+	return "whatsapp:template:" + phone
+}
+
+// canSendWhatsAppTemplate returns true if a template message may be sent to
+// the given phone number (no template has been sent in the last 24 hours).
+// When it returns true it also sets the cooldown key so subsequent calls
+// within the window return false.
+func canSendWhatsAppTemplate(app *App, phone string) bool {
+	key := whatsappTemplateLimitKey(phone)
+	set, err := app.redis.SetNX(context.Background(), key, 1, whatsappTemplateCooldown).Result()
+	if err != nil {
+		// On Redis error, allow the send rather than silently blocking it.
+		app.lo.Warn("whatsapp: redis error checking template cooldown, allowing send", "phone", phone, "error", err)
+		return true
+	}
+	return set
+}
 
 // handleTwilioWhatsAppWebhook receives inbound WhatsApp messages forwarded by Twilio.
 // The route is public (no auth middleware) but protected by Twilio signature validation.
@@ -283,6 +308,9 @@ func handleSendWhatsAppReEngagement(r *fastglue.Request) error {
 	}
 
 	cfg := waInb.GetConfig()
+	if !canSendWhatsAppTemplate(app, toNumber) {
+		return r.SendErrorEnvelope(fasthttp.StatusTooManyRequests, "a template was already sent to this contact in the last 24 hours", nil, envelope.InputError)
+	}
 	if err := tmpl.SendTemplate(toNumber, cfg.ContentSID); err != nil {
 		app.lo.Error("whatsapp re-engagement: failed to send template", "conversation_uuid", uuid, "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.GeneralError)

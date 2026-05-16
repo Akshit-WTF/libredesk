@@ -176,6 +176,7 @@ const submitWhatsAppForm = (values) => {
       account_sid: values.config.account_sid,
       auth_token: values.config.auth_token,
       from_number: values.config.from_number,
+      init_content_sid: values.config.init_content_sid ?? '',
       content_sid: values.config.content_sid ?? ''
     }
   }

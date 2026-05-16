@@ -216,9 +216,6 @@ func validateInbox(app *App, inbox imodels.Inbox) error {
 		if cfg.AccountSID == "" {
 			return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "account_sid"), nil)
 		}
-		if cfg.AuthToken == "" {
-			return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "auth_token"), nil)
-		}
 		if cfg.FromNumber == "" {
 			return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "from_number"), nil)
 		}

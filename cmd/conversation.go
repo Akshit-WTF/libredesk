@@ -12,6 +12,7 @@ import (
 	"github.com/abhinavxd/libredesk/internal/automation/models"
 	cmodels "github.com/abhinavxd/libredesk/internal/conversation/models"
 	"github.com/abhinavxd/libredesk/internal/envelope"
+	"github.com/abhinavxd/libredesk/internal/inbox"
 	"github.com/abhinavxd/libredesk/internal/inbox/channel/whatsapp"
 	"github.com/abhinavxd/libredesk/internal/stringutil"
 	umodels "github.com/abhinavxd/libredesk/internal/user/models"
@@ -831,6 +832,28 @@ func handleCreateConversation(r *fastglue.Request) error {
 			}
 			return sendErrorEnvelope(r, envelope.NewError(envelope.GeneralError, app.i18n.T("globals.messages.errorSendingMessage"), nil))
 		}
+		// For WhatsApp, immediately send the initiation template to open the conversation window.
+		if strings.HasSuffix(req.Email, whatsapp.PhoneSuffix) {
+			if inb, err := app.inbox.Get(req.InboxID); err == nil {
+				if wa, ok := inb.(*whatsapp.WhatsApp); ok {
+					cfg := wa.GetConfig()
+					if cfg.InitContentSID != "" {
+						toNumber, pErr := whatsapp.PhoneFromPseudoEmail(req.Email)
+						if pErr == nil {
+							if tmpl, ok := inb.(inbox.TemplateMessenger); ok {
+								if canSendWhatsAppTemplate(app, toNumber) {
+									if tErr := tmpl.SendTemplate(toNumber, cfg.InitContentSID); tErr != nil {
+										app.lo.Error("whatsapp: failed to send init template", "conversation_uuid", conversationUUID, "error", tErr)
+									}
+								} else {
+									app.lo.Warn("whatsapp: init template skipped, cooldown active", "conversation_uuid", conversationUUID, "phone", toNumber)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 		// Trigger webhook for agent-initiated conversation, for contact intitiated the incoming message hooks handle it.
 		if c, err := app.conversation.GetConversation(0, conversationUUID, ""); err == nil {
 			app.webhook.TriggerEvent(wmodels.EventConversationCreated, c)
@@ -892,6 +915,13 @@ func validateCreateConversationRequest(req createConversationRequest, app *App) 
 	}
 	if inbox.Channel != "email" && inbox.Channel != "whatsapp" {
 		return envelope.NewError(envelope.InputError, app.i18n.T("globals.messages.somethingWentWrong"), nil)
+	}
+	// For WhatsApp, require the initiation template to be configured.
+	if inbox.Channel == "whatsapp" {
+		var waCfg whatsapp.Config
+		if err := json.Unmarshal(inbox.Config, &waCfg); err != nil || waCfg.InitContentSID == "" {
+			return envelope.NewError(envelope.InputError, app.i18n.T("globals.messages.somethingWentWrong"), nil)
+		}
 	}
 
 	// Validate custom attribute keys. Skip unknown keys.

@@ -162,34 +162,44 @@ func (m *Manager) sendOutgoingMessage(message models.Message) {
 		if err != nil {
 			m.lo.Error("whatsapp: could not check last inbound time, proceeding with send", "error", err)
 		}
-		outsideWindow := tm.IsZero() || time.Since(tm) > 24*time.Hour
-		if outsideWindow {
-			if tmpl, ok := inb.(inbox.TemplateMessenger); ok && tmpl != nil {
-				// Resolve recipient phone.
-				contact, cErr := m.userStore.GetContactOrVisitor(message.MessageReceiverID, "")
-				if cErr != nil {
-					handleError(cErr, "whatsapp: could not resolve contact for template")
-					return
+		windowExpired := !tm.IsZero() && time.Since(tm) > 24*time.Hour
+		noInboundEver := tm.IsZero()
+		if windowExpired || noInboundEver {
+			if windowExpired {
+				// Window expired: send re-engagement template to let the customer re-open it.
+				if tmpl, ok := inb.(inbox.TemplateMessenger); ok && tmpl != nil {
+					contact, cErr := m.userStore.GetContactOrVisitor(message.MessageReceiverID, "")
+					if cErr != nil {
+						handleError(cErr, "whatsapp: could not resolve contact for template")
+						return
+					}
+					waInb := inb.(*whatsapp.WhatsApp)
+					toNumber, pErr := whatsapp.PhoneFromPseudoEmail(contact.Email.String)
+					if pErr != nil {
+						handleError(pErr, "whatsapp: could not resolve phone for template")
+						return
+					}
+					// Check rate limit before sending (guards against concurrent sends when
+					// the agent queues multiple messages while the window is expired).
+					if m.templateRateLimiter != nil && !m.templateRateLimiter(toNumber) {
+						m.UpdateMessageStatus(message.UUID, models.MessageStatusAwaitingWindow)
+						m.lo.Info("whatsapp: template cooldown active, holding agent reply", "conversation_uuid", message.ConversationUUID)
+						return
+					}
+					if sErr := tmpl.SendTemplate(toNumber, waInb.GetConfig().ContentSID); sErr != nil {
+						handleError(sErr, "whatsapp: failed to send re-engagement template")
+						return
+					}
+					m.lo.Info("whatsapp: service window expired; re-engagement template sent, agent reply queued", "conversation_uuid", message.ConversationUUID)
+				} else {
+					m.lo.Warn("whatsapp: service window expired and no template configured; agent reply queued", "conversation_uuid", message.ConversationUUID)
 				}
-				waInb := inb.(*whatsapp.WhatsApp)
-				toNumber, pErr := whatsapp.PhoneFromPseudoEmail(contact.Email.String)
-				if pErr != nil {
-					handleError(pErr, "whatsapp: could not resolve phone for template")
-					return
-				}
-				// Send the re-engagement template.
-				if sErr := tmpl.SendTemplate(toNumber, waInb.GetConfig().ContentSID); sErr != nil {
-					handleError(sErr, "whatsapp: failed to send re-engagement template")
-					return
-				}
-				// Hold the agent's original reply until the customer re-opens the window.
-				m.UpdateMessageStatus(message.UUID, models.MessageStatusAwaitingWindow)
-				m.lo.Info("whatsapp: service window closed; template sent, agent reply queued", "conversation_uuid", message.ConversationUUID)
 			} else {
-				// No template configured — hold the message silently, log a warning.
-				m.UpdateMessageStatus(message.UUID, models.MessageStatusAwaitingWindow)
-				m.lo.Warn("whatsapp: service window closed and no template configured; agent reply queued", "conversation_uuid", message.ConversationUUID)
+				// No inbound messages yet (new agent-initiated conversation). The init template
+				// was already sent by the conversation creation handler; just hold this reply.
+				m.lo.Info("whatsapp: no inbound messages yet; holding agent reply until customer responds", "conversation_uuid", message.ConversationUUID)
 			}
+			m.UpdateMessageStatus(message.UUID, models.MessageStatusAwaitingWindow)
 			return
 		}
 	}

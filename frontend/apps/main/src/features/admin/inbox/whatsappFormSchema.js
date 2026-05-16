@@ -13,6 +13,7 @@ export const createFormSchema = (t) =>
         .string()
         .min(1, t('globals.messages.required'))
         .regex(/^\+[1-9]\d{6,14}$/, t('validation.invalidValue')),
+      init_content_sid: z.string().optional().default(''),
       content_sid: z.string().optional().default(''),
 
     })

@@ -297,6 +297,7 @@ func initConversations(
 	template *tmpl.Manager,
 	webhook *webhook.Manager,
 	dispatcher *notifier.Dispatcher,
+	rdb *redis.Client,
 ) *conversation.Manager {
 	continuityConfig := &conversation.ContinuityConfig{}
 	if ko.Exists("conversation.continuity_scan_interval") {
@@ -310,6 +311,7 @@ func initConversations(
 		IncomingMessageQueueSize: ko.MustInt("message.incoming_queue_size"),
 		ContinuityConfig:         continuityConfig,
 		SubjectRefFormat:         ko.String("conversation.subject_ref_format"),
+		TemplateRateLimiter:      makeWhatsAppTemplateRateLimiter(rdb),
 	})
 	if err != nil {
 		log.Fatalf("error initializing conversation manager: %v", err)
@@ -896,9 +898,24 @@ func initI18n(fs stuffbin.FileSystem) *i18n.I18n {
 	return i18n
 }
 
+// makeWhatsAppTemplateRateLimiter returns a function that uses Redis SET NX EX
+// to enforce a 24-hour cooldown on WhatsApp template sends per phone number.
+// Returns true (and sets the key) the first time it is called for a phone within
+// the window, and false on subsequent calls.
+func makeWhatsAppTemplateRateLimiter(rdb *redis.Client) func(string) bool {
+	return func(phone string) bool {
+		key := "whatsapp:template:" + phone
+		set, err := rdb.SetNX(context.Background(), key, 1, whatsappTemplateCooldown).Result()
+		if err != nil {
+			// On Redis error allow the send rather than silently blocking it.
+			return true
+		}
+		return set
+	}
+}
+
 // initRedis inits redis DB.
 func initRedis() *redis.Client {
-	// Load options from redis URL if set.
 	redisURL := ko.String("redis.url")
 	if redisURL != "" {
 		options, err := redis.ParseURL(redisURL)

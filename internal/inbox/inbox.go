@@ -417,6 +417,28 @@ func (m *Manager) Update(id int, inbox imodels.Inbox) (imodels.Inbox, error) {
 			return imodels.Inbox{}, err
 		}
 		inbox.Config = updatedConfig
+	case "whatsapp":
+		var currentWACfg, updateWACfg struct {
+			AccountSID     string `json:"account_sid"`
+			AuthToken      string `json:"auth_token"`
+			FromNumber     string `json:"from_number"`
+			InitContentSID string `json:"init_content_sid"`
+			ContentSID     string `json:"content_sid"`
+		}
+		if err := json.Unmarshal(current.Config, &currentWACfg); err != nil {
+			return imodels.Inbox{}, envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
+		}
+		if err := json.Unmarshal(inbox.Config, &updateWACfg); err != nil {
+			return imodels.Inbox{}, envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
+		}
+		if updateWACfg.AuthToken == "" {
+			updateWACfg.AuthToken = currentWACfg.AuthToken
+		}
+		updatedWAConfig, err := json.Marshal(updateWACfg)
+		if err != nil {
+			return imodels.Inbox{}, err
+		}
+		inbox.Config = updatedWAConfig
 	case "livechat":
 		// Preserve existing secret if update contains password dummy
 		if inbox.Secret.Valid && strings.Contains(inbox.Secret.String, stringutil.PasswordDummy) {

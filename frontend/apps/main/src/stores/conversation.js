@@ -265,6 +265,14 @@ export const useConversationStore = defineStore('conversation', () => {
     return messages.data.getAllPagesMessages(conversation.data?.uuid)
   })
 
+  // True when the current WhatsApp conversation has at least one agent reply
+  // held in awaiting_window state (service window is closed).
+  const whatsappWindowClosed = computed(() => {
+    if (conversation.data?.inbox_channel !== 'whatsapp') return false
+    const msgs = messages.data.getAllPagesMessages(conversation.data?.uuid) ?? []
+    return msgs.some(m => m.status === 'awaiting_window')
+  })
+
   function markConversationAsRead (uuid) {
     const index = conversations.data.findIndex(conv => conv.uuid === uuid)
     if (index !== -1) {
@@ -995,6 +1003,7 @@ export const useConversationStore = defineStore('conversation', () => {
     conversationsList,
     conversationMessages,
     currentConversationHasMoreMessages,
+    whatsappWindowClosed,
     isConversationOpen,
     current,
     currentContactName,

@@ -39,6 +39,9 @@ type Config struct {
 	AuthToken  string `json:"auth_token"`
 	// FromNumber is the Twilio WhatsApp-enabled number in E.164 format, e.g. "+14155238886".
 	FromNumber string `json:"from_number"`
+	// InitContentSID is the Twilio Content template SID used when an agent initiates a new
+	// outbound WhatsApp conversation (before the 24-hour window is open).
+	InitContentSID string `json:"init_content_sid"`
 	// ContentSID is the Twilio Content template SID (starts with HX) sent when the
 	// customer's 24-hour service window has closed. Optional; if empty, out-of-window
 	// replies are held until the customer re-opens the window by messaging first.
